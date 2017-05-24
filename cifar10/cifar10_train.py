@@ -44,7 +44,6 @@ from . import cifar10
 from .cifar10_args import *
 
 def train():
-  print(Arguments.train_dir)
   """Train CIFAR-10 for a number of steps."""
   with tf.Graph().as_default():
     global_step = tf.contrib.framework.get_or_create_global_step()

@@ -179,7 +179,7 @@ def conv_layer(input, size_in, size_out, name="conv"):
   with tf.variable_scope(name) as scope:
     W = _variable_with_weight_decay('W', shape=[5, 5, size_in, size_out], stddev=5e-2, wd=0.0)
     conv = tf.nn.conv2d(input, W, strides=[1, 1, 1, 1], padding="SAME")
-    b = _variable_on_cpu('b', [size_out], tf.constant_initializer(0.0))
+    b = _variable_on_cpu('b', [size_out], tf.constant_initializer(0.01))
     conv_b = tf.nn.bias_add(conv, b)
     conv_b_relu = tf.nn.relu(conv_b, name=scope.name)
     _activation_summary(conv_b_relu)
@@ -198,46 +198,21 @@ def inference(images):
   # tf.Variable() in order to share variables across multiple GPU training runs.
   # If we only ran this model on a single GPU, we could simplify this function
   # by replacing all instances of tf.get_variable() with tf.Variable().
-  #
+    
   # conv1
   conv1 = conv_layer(images, 3, 64, name="conv1")
-  '''
-  with tf.variable_scope('conv1') as scope:
-    kernel = _variable_with_weight_decay('weights', shape=[5, 5, 3, 64], stddev=5e-2, wd=0.0)
-    conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
-    biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.0))
-    pre_activation = tf.nn.bias_add(conv, biases)
-    conv1 = tf.nn.relu(pre_activation, name=scope.name)
-    _activation_summary(conv1)
-  '''
-
   # pool1
-  pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],
-                         padding='SAME', name='pool1')
+  pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool1')
   # norm1
-  norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
-                    name='norm1')
-
+  norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75, name='norm1')
   # conv2
-  with tf.variable_scope('conv2') as scope:
-    kernel = _variable_with_weight_decay('weights',
-                                         shape=[5, 5, 64, 64],
-                                         stddev=5e-2,
-                                         wd=0.0)
-    conv = tf.nn.conv2d(norm1, kernel, [1, 1, 1, 1], padding='SAME')
-    biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.1))
-    pre_activation = tf.nn.bias_add(conv, biases)
-    conv2 = tf.nn.relu(pre_activation, name=scope.name)
-    _activation_summary(conv2)
-
+  conv2 = conv_layer(norm1, 64, 64, name="conv2")
   # norm2
-  norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
-                    name='norm2')
+  norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75, name='norm2')
   # pool2
-  pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1],
-                         strides=[1, 2, 2, 1], padding='SAME', name='pool2')
+  pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool2')
 
-  # local3
+  # local3 (fully connected layer)
   with tf.variable_scope('local3') as scope:
     # Move everything into depth so we can perform a single matrix multiply.
     reshape = tf.reshape(pool2, [Arguments.batch_size, -1])
