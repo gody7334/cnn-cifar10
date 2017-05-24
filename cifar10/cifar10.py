@@ -39,6 +39,7 @@ import os
 import re
 import sys
 import tarfile
+from pprint import pprint
 
 from six.moves import urllib
 import tensorflow as tf
@@ -82,8 +83,7 @@ def _activation_summary(x):
   # session. This helps the clarity of presentation on tensorboard.
   tensor_name = re.sub('%s_[0-9]*/' % TOWER_NAME, '', x.op.name)
   tf.summary.histogram(tensor_name + '/activations', x)
-  tf.summary.scalar(tensor_name + '/sparsity',
-                                       tf.nn.zero_fraction(x))
+  tf.summary.scalar(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
 
 
 def _variable_on_cpu(name, shape, initializer):
@@ -98,7 +98,7 @@ def _variable_on_cpu(name, shape, initializer):
     Variable Tensor
   """
   with tf.device('/cpu:0'):
-    dtype = tf.float16 if args.use_fp16 else tf.float32
+    dtype = tf.float16 if Arguments.use_fp16 else tf.float32
     var = tf.get_variable(name, shape, initializer=initializer, dtype=dtype)
   return var
 
@@ -119,7 +119,7 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
   Returns:
     Variable Tensor
   """
-  dtype = tf.float16 if args.use_fp16 else tf.float32
+  dtype = tf.float16 if Arguments.use_fp16 else tf.float32
   var = _variable_on_cpu(
       name,
       shape,
@@ -140,12 +140,12 @@ def distorted_inputs():
   Raises:
     ValueError: If no data_dir
   """
-  if not args.data_dir:
+  if not Arguments.data_dir:
     raise ValueError('Please supply a data_dir')
-  data_dir = os.path.join(args.data_dir, 'cifar-10-batches-bin')
+  data_dir = os.path.join(Arguments.data_dir, 'cifar-10-batches-bin')
   images, labels = cifar10_input.distorted_inputs(data_dir=data_dir,
-                                                  batch_size=args.batch_size)
-  if args.use_fp16:
+                                                  batch_size=Arguments.batch_size)
+  if Arguments.use_fp16:
     images = tf.cast(images, tf.float16)
     labels = tf.cast(labels, tf.float16)
   return images, labels
@@ -164,17 +164,26 @@ def inputs(eval_data):
   Raises:
     ValueError: If no data_dir
   """
-  if not args.data_dir:
+  if not Arguments.data_dir:
     raise ValueError('Please supply a data_dir')
-  data_dir = os.path.join(args.data_dir, 'cifar-10-batches-bin')
+  data_dir = os.path.join(Arguments.data_dir, 'cifar-10-batches-bin')
   images, labels = cifar10_input.inputs(eval_data=eval_data,
                                         data_dir=data_dir,
-                                        batch_size=args.batch_size)
-  if args.use_fp16:
+                                        batch_size=Arguments.batch_size)
+  if Arguments.use_fp16:
     images = tf.cast(images, tf.float16)
     labels = tf.cast(labels, tf.float16)
   return images, labels
 
+def conv_layer(input, size_in, size_out, name="conv"):
+  with tf.variable_scope(name) as scope:
+    W = _variable_with_weight_decay('W', shape=[5, 5, size_in, size_out], stddev=5e-2, wd=0.0)
+    conv = tf.nn.conv2d(input, W, strides=[1, 1, 1, 1], padding="SAME")
+    b = _variable_on_cpu('b', [size_out], tf.constant_initializer(0.0))
+    conv_b = tf.nn.bias_add(conv, b)
+    conv_b_relu = tf.nn.relu(conv_b, name=scope.name)
+    _activation_summary(conv_b_relu)
+    return conv_b_relu
 
 def inference(images):
   """Build the CIFAR-10 model.
@@ -191,16 +200,16 @@ def inference(images):
   # by replacing all instances of tf.get_variable() with tf.Variable().
   #
   # conv1
+  conv1 = conv_layer(images, 3, 64, name="conv1")
+  '''
   with tf.variable_scope('conv1') as scope:
-    kernel = _variable_with_weight_decay('weights',
-                                         shape=[5, 5, 3, 64],
-                                         stddev=5e-2,
-                                         wd=0.0)
+    kernel = _variable_with_weight_decay('weights', shape=[5, 5, 3, 64], stddev=5e-2, wd=0.0)
     conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
     biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.0))
     pre_activation = tf.nn.bias_add(conv, biases)
     conv1 = tf.nn.relu(pre_activation, name=scope.name)
     _activation_summary(conv1)
+  '''
 
   # pool1
   pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],
@@ -231,7 +240,7 @@ def inference(images):
   # local3
   with tf.variable_scope('local3') as scope:
     # Move everything into depth so we can perform a single matrix multiply.
-    reshape = tf.reshape(pool2, [args.batch_size, -1])
+    reshape = tf.reshape(pool2, [Arguments.batch_size, -1])
     dim = reshape.get_shape()[1].value
     weights = _variable_with_weight_decay('weights', shape=[dim, 384],
                                           stddev=0.04, wd=0.004)
@@ -327,7 +336,7 @@ def train(total_loss, global_step):
     train_op: op for training.
   """
   # Variables that affect learning rate.
-  num_batches_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN / args.batch_size
+  num_batches_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN / Arguments.batch_size
   decay_steps = int(num_batches_per_epoch * NUM_EPOCHS_PER_DECAY)
 
   # Decay the learning rate exponentially based on the number of steps.
@@ -371,7 +380,7 @@ def train(total_loss, global_step):
 
 def maybe_download_and_extract():
   """Download and extract the tarball from Alex's website."""
-  dest_directory = args.data_dir
+  dest_directory = Arguments.data_dir
   if not os.path.exists(dest_directory):
     os.makedirs(dest_directory)
   filename = DATA_URL.split('/')[-1]

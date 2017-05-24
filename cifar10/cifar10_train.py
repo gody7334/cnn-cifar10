@@ -44,6 +44,7 @@ from . import cifar10
 from .cifar10_args import *
 
 def train():
+  print(Arguments.train_dir)
   """Train CIFAR-10 for a number of steps."""
   with tf.Graph().as_default():
     global_step = tf.contrib.framework.get_or_create_global_step()
@@ -75,36 +76,36 @@ def train():
         return tf.train.SessionRunArgs(loss)  # Asks for loss value.
 
       def after_run(self, run_context, run_values):
-        if self._step % args.log_frequency == 0:
+        if self._step % Arguments.log_frequency == 0:
           current_time = time.time()
           duration = current_time - self._start_time
           self._start_time = current_time
 
           loss_value = run_values.results
-          examples_per_sec = args.log_frequency * args.batch_size / duration
-          sec_per_batch = float(duration / args.log_frequency)
+          examples_per_sec = Arguments.log_frequency * Arguments.batch_size / duration
+          sec_per_batch = float(duration / Arguments.log_frequency)
 
           format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
                         'sec/batch)')
           print (format_str % (datetime.now(), self._step, loss_value,
                                examples_per_sec, sec_per_batch))
-    print(args.max_steps)
+    print(Arguments.max_steps)
     
     with tf.train.MonitoredTrainingSession(
-        checkpoint_dir=args.train_dir,
-        hooks=[tf.train.StopAtStepHook(last_step=args.max_steps),
+        checkpoint_dir=Arguments.train_dir,
+        hooks=[tf.train.StopAtStepHook(last_step=Arguments.max_steps),
                tf.train.NanTensorHook(loss),
                _LoggerHook()],
         config=tf.ConfigProto(
-            log_device_placement=args.log_device_placement)) as mon_sess:
+            log_device_placement=Arguments.log_device_placement)) as mon_sess:
       while not mon_sess.should_stop():
         mon_sess.run(train_op)
 
 def main(argv=None):  # pylint: disable=unused-argument
   cifar10.maybe_download_and_extract()
-  if tf.gfile.Exists(args.train_dir):
-    tf.gfile.DeleteRecursively(args.train_dir)
-  tf.gfile.MakeDirs(args.train_dir)
+  if tf.gfile.Exists(Arguments.train_dir):
+    tf.gfile.DeleteRecursively(Arguments.train_dir)
+  tf.gfile.MakeDirs(Arguments.train_dir)
   train()
 
 

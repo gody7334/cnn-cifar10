@@ -1,5 +1,6 @@
 import sys, argparse
 
+'''
 parser = argparse.ArgumentParser(description='train cnn args.')
 parser.add_argument('-f')
 parser.add_argument('-train_dir', help="Directory where to write event logs and checkpoint.", default="/tmp/cifar10_train")
@@ -18,3 +19,57 @@ parser.add_argument('-num_examples', help="Number of examples to run.", default=
 parser.add_argument('-run_once', help="Whether to run eval only once.", default=False,type=bool)
 
 args = parser.parse_args()
+'''
+
+class Arguments(object):
+    train_dir = "/home/ipython/cnn-cifar10/tb_log/default/train"
+    data_dir = "/home/ipython/cnn-cifar10/data"
+    max_steps = 10000000
+    batch_size = 128
+    log_device_placement = False
+    use_fp16 = False
+    log_frequency = 10
+    eval_dir = "/home/ipython/cnn-cifar10/tb_log/default/eval"
+    eval_data = "test"
+    checkpoint_dir = "/home/ipython/cnn-cifar10/tb_log/default/train"
+    eval_interval_secs = 60
+    num_examples = 10000
+    run_once = False
+
+    '''
+    def __init__(self,
+                 train_dir = "/home/ipython/cnn-cifar10/tb_log/default/train",
+                 data_dir = "/home/ipython/cnn-cifar10/data",
+                 max_steps = 10000000,
+                 batch_size = 128,
+                 log_device_placement = False,
+                 use_fp16 = False,
+                 log_frequency = 10,
+                 eval_dir = "/home/ipython/cnn-cifar10/tb_log/default/eval",
+                 eval_data = "test",
+                 checkpoint_dir = "/home/ipython/cnn-cifar10/tb_log/default/train",
+                 eval_interval_secs = 60,
+                 num_examples = 10000,
+                 run_once = False):
+        
+        self.train_dir = train_dir
+        self.data_dir = data_dir
+        self.max_steps = max_steps
+        self.batch_size = batch_size
+        self.log_device_placement = log_device_placement
+        self.use_fp16 = use_fp16
+        self.log_frequency = log_frequency
+        self.eval_dir = eval_dir
+        self.eval_data = eval_data
+        self.checkpoint_dir = checkpoint_dir
+        self.eval_interval_secs = eval_interval_secs
+        self.num_examples = num_examples
+        self.run_once = run_once
+    '''
+        
+    @staticmethod    
+    def set_model_folder(f_str):
+        Arguments.train_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/train"
+        eval_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/eval"
+        checkpoint_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/train"
+        

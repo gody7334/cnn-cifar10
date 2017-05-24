@@ -57,8 +57,8 @@ def eval_once(saver, summary_writer, top_k_op, summary_op):
   os.environ["CUDA_VISIBLE_DEVICES"]=""
     
   with tf.Session() as sess:
-    print(args.checkpoint_dir)
-    ckpt = tf.train.get_checkpoint_state(args.checkpoint_dir)
+    print(Arguments.checkpoint_dir)
+    ckpt = tf.train.get_checkpoint_state(Arguments.checkpoint_dir)
     if ckpt and ckpt.model_checkpoint_path:
       # Restores from checkpoint
       saver.restore(sess, ckpt.model_checkpoint_path)
@@ -78,9 +78,9 @@ def eval_once(saver, summary_writer, top_k_op, summary_op):
         threads.extend(qr.create_threads(sess, coord=coord, daemon=True,
                                          start=True))
 
-      num_iter = int(math.ceil(args.num_examples / args.batch_size))
+      num_iter = int(math.ceil(Arguments.num_examples / Arguments.batch_size))
       true_count = 0  # Counts the number of correct predictions.
-      total_sample_count = num_iter * args.batch_size
+      total_sample_count = num_iter * Arguments.batch_size
       step = 0
       while step < num_iter and not coord.should_stop():
         predictions = sess.run([top_k_op])
@@ -106,7 +106,7 @@ def evaluate():
   """Eval CIFAR-10 for a number of steps."""
   with tf.Graph().as_default() as g:
     # Get images and labels for CIFAR-10.
-    eval_data = args.eval_data == 'test'
+    eval_data = Arguments.eval_data == 'test'
     images, labels = cifar10.inputs(eval_data=eval_data)
 
     # Build a Graph that computes the logits predictions from the
@@ -125,13 +125,13 @@ def evaluate():
     # Build the summary operation based on the TF collection of Summaries.
     summary_op = tf.summary.merge_all()
 
-    summary_writer = tf.summary.FileWriter(args.eval_dir, g)
+    summary_writer = tf.summary.FileWriter(Arguments.eval_dir, g)
 
     while True:
       eval_once(saver, summary_writer, top_k_op, summary_op)
-      if args.run_once:
+      if Arguments.run_once:
         break
-      time.sleep(args.eval_interval_secs)
+      time.sleep(Arguments.eval_interval_secs)
 
 '''
 def main(argv=None):  # pylint: disable=unused-argument
