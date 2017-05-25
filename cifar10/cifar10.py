@@ -185,6 +185,14 @@ def conv_layer(input, size_in, size_out, name="conv"):
     _activation_summary(conv_b_relu)
     return conv_b_relu
 
+def fc_layer(input, size_in, size_out, name="fc"):
+  with tf.variable_scope(name) as scope:
+    W = _variable_with_weight_decay('W', shape=[size_in, size_out], stddev=0.04, wd=0.004)
+    b = _variable_on_cpu('b', [size_out], tf.constant_initializer(0.01))
+    fc = tf.nn.relu(tf.add(tf.matmul(input, W), b), name=scope.name)
+    _activation_summary(fc)
+    return fc
+
 def inference(images):
   """Build the CIFAR-10 model.
 
@@ -213,28 +221,22 @@ def inference(images):
   pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool2')
 
   # local3 (fully connected layer)
-  with tf.variable_scope('local3') as scope:
-    # Move everything into depth so we can perform a single matrix multiply.
-    reshape = tf.reshape(pool2, [Arguments.batch_size, -1])
-    dim = reshape.get_shape()[1].value
-    weights = _variable_with_weight_decay('weights', shape=[dim, 384],
-                                          stddev=0.04, wd=0.004)
-    biases = _variable_on_cpu('biases', [384], tf.constant_initializer(0.1))
-    local3 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name=scope.name)
-    _activation_summary(local3)
-
+  reshape = tf.reshape(pool2, [Arguments.batch_size, -1])
+  dim = reshape.get_shape()[1].value
+  local3 = fc_layer(reshape, dim, 384, 'local3')
+  
   # local4
-  with tf.variable_scope('local4') as scope:
-    weights = _variable_with_weight_decay('weights', shape=[384, 192],
-                                          stddev=0.04, wd=0.004)
-    biases = _variable_on_cpu('biases', [192], tf.constant_initializer(0.1))
-    local4 = tf.nn.relu(tf.matmul(local3, weights) + biases, name=scope.name)
-    _activation_summary(local4)
+  local4 = fc_layer(local3, 384, 192, 'local4')
 
   # linear layer(WX + b),
   # We don't apply softmax here because
   # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits
   # and performs the softmax internally for efficiency.
+  softmax_linear = fc_layer(local4, 192, NUM_CLASSES, 'softmax_linear')
+  
+  softmax = tf.nn.softmax(softmax_linear,name='softmax')
+  _activation_summary(softmax)
+  '''
   with tf.variable_scope('softmax_linear') as scope:
     weights = _variable_with_weight_decay('weights', [192, NUM_CLASSES],
                                           stddev=1/192.0, wd=0.0)
@@ -242,7 +244,7 @@ def inference(images):
                               tf.constant_initializer(0.0))
     softmax_linear = tf.add(tf.matmul(local4, weights), biases, name=scope.name)
     _activation_summary(softmax_linear)
-
+  '''
   return softmax_linear
 
 
