@@ -25,7 +25,7 @@ class Arguments(object):
     train_dir = "/home/ipython/cnn-cifar10/tb_log/default/train"
     data_dir = "/home/ipython/cnn-cifar10/data"
     max_steps = 10000000
-    batch_size = 128
+    batch_size = 256
     log_device_placement = False
     use_fp16 = False
     log_frequency = 10

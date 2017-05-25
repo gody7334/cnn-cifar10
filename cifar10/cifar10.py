@@ -58,7 +58,7 @@ NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = cifar10_input.NUM_EXAMPLES_PER_EPOCH_FOR_EVAL
 MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
 NUM_EPOCHS_PER_DECAY = 350.0      # Epochs after which learning rate decays.
 LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
-INITIAL_LEARNING_RATE = 0.1       # Initial learning rate.
+INITIAL_LEARNING_RATE = 0.001       # Initial learning rate.
 
 # If a model is trained with multiple GPUs, prefix all Op names with tower_name
 # to differentiate the operations. Note that this prefix is removed from the
@@ -193,6 +193,15 @@ def fc_layer(input, size_in, size_out, name="fc"):
     _activation_summary(fc)
     return fc
 
+def bn_layer(input, name='bn'):
+  with tf.variable_scope(name) as scope:
+    mean, var = tf.nn.moments(input,[0,1,2])
+    gamma = _variable_on_cpu('gamma', [input.get_shape()[3]], tf.constant_initializer(0.01))
+    beta = _variable_on_cpu('beta', [input.get_shape()[3]], tf.constant_initializer(0.01))
+    bn = tf.nn.batch_normalization(input, mean, var, beta, gamma, variance_epsilon=1e-10, name=scope.name)
+    _activation_summary(bn)
+    return bn
+    
 def inference(images):
   """Build the CIFAR-10 model.
 
@@ -206,17 +215,19 @@ def inference(images):
   # tf.Variable() in order to share variables across multiple GPU training runs.
   # If we only ran this model on a single GPU, we could simplify this function
   # by replacing all instances of tf.get_variable() with tf.Variable().
-    
+
   # conv1
   conv1 = conv_layer(images, 3, 64, name="conv1")
   # pool1
   pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool1')
   # norm1
-  norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75, name='norm1')
+  #norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75, name='norm1')
+  norm1 = bn_layer(pool1,"norm1")
   # conv2
   conv2 = conv_layer(norm1, 64, 64, name="conv2")
   # norm2
-  norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75, name='norm2')
+  #norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75, name='norm2')
+  norm2 = bn_layer(conv2,"norm2")
   # pool2
   pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool2')
 
@@ -236,15 +247,7 @@ def inference(images):
   
   softmax = tf.nn.softmax(softmax_linear,name='softmax')
   _activation_summary(softmax)
-  '''
-  with tf.variable_scope('softmax_linear') as scope:
-    weights = _variable_with_weight_decay('weights', [192, NUM_CLASSES],
-                                          stddev=1/192.0, wd=0.0)
-    biases = _variable_on_cpu('biases', [NUM_CLASSES],
-                              tf.constant_initializer(0.0))
-    softmax_linear = tf.add(tf.matmul(local4, weights), biases, name=scope.name)
-    _activation_summary(softmax_linear)
-  '''
+ 
   return softmax_linear
 
 
@@ -329,7 +332,8 @@ def train(total_loss, global_step):
 
   # Compute gradients.
   with tf.control_dependencies([loss_averages_op]):
-    opt = tf.train.GradientDescentOptimizer(lr)
+    #opt = tf.train.GradientDescentOptimizer(lr)
+    opt = tf.train.AdamOptimizer(lr)
     grads = opt.compute_gradients(total_loss)
 
   # Apply gradients.
