@@ -225,36 +225,27 @@ def inference(images):
 
   #vgg1
   vgg1 = vgg_layer(images, 64, 2, name='vgg1')
+  
+  vgg2 = vgg_layer(vgg1, 128, 2, name='vgg2')
 
-  '''
-  # conv1
-  conv1 = conv_layer(images, 3, 64, name="conv1")
-  # pool1
-  pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool1')
-  # norm1
-  #norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75, name='norm1')
-  norm1 = bn_layer(pool1,"norm1")
-  # conv2
-  conv2 = conv_layer(norm1, 64, 64, name="conv2")
-  # norm2
-  #norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75, name='norm2')
-  norm2 = bn_layer(conv2,"norm2")
-  # pool2
-  pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool2')
-  '''
+  vgg3 = vgg_layer(vgg2, 256, 4, name='vgg3')
+    
+  vgg4 = vgg_layer(vgg3, 512, 4, name='vgg4')
+
+  
   # local3 (fully connected layer)
-  reshape = tf.reshape(vgg1, [Arguments.batch_size, -1])
+  reshape = tf.reshape(vgg4, [Arguments.batch_size, -1])
   dim = reshape.get_shape()[1].value
-  local3 = fc_layer(reshape, dim, 384, 'local3')
+  local3 = fc_layer(reshape, dim, 4096, 'local3')
   
   # local4
-  local4 = fc_layer(local3, 384, 192, 'local4')
+  local4 = fc_layer(local3, 4096, 1000, 'local4')
 
   # linear layer(WX + b),
   # We don't apply softmax here because
   # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits
   # and performs the softmax internally for efficiency.
-  softmax_linear = fc_layer(local4, 192, NUM_CLASSES, 'softmax_linear')
+  softmax_linear = fc_layer(local4, 1000, NUM_CLASSES, 'softmax_linear')
   
   softmax = tf.nn.softmax(softmax_linear,name='softmax')
   _activation_summary(softmax)

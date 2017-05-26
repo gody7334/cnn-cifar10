@@ -45,7 +45,7 @@ import tensorflow as tf
 from . import cifar10
 from .cifar10_args import * 
 
-def eval_once(saver, summary_writer, top_k_op, summary_op):
+def eval_once(saver, summary_writer, top_k_op, summary_op,name="top1"):
   """Run Eval once.
 
   Args:
@@ -54,7 +54,7 @@ def eval_once(saver, summary_writer, top_k_op, summary_op):
     top_k_op: Top K op.
     summary_op: Summary op.
   """
-  os.environ["CUDA_VISIBLE_DEVICES"]=""
+  #os.environ["CUDA_VISIBLE_DEVICES"]=""
     
   with tf.Session() as sess:
     print(Arguments.checkpoint_dir)
@@ -89,11 +89,11 @@ def eval_once(saver, summary_writer, top_k_op, summary_op):
 
       # Compute precision @ 1.
       precision = true_count / total_sample_count
-      print('%s: precision @ 1 = %.3f' % (datetime.now(), precision))
+      print('%s: precision @ 1 %s = %.3f' % (datetime.now(), name, precision))
 
       summary = tf.Summary()
       summary.ParseFromString(sess.run(summary_op))
-      summary.value.add(tag='Precision @ 1', simple_value=precision)
+      summary.value.add(tag='Precision @ 1'+name, simple_value=precision)
       summary_writer.add_summary(summary, global_step)
     except Exception as e:  # pylint: disable=broad-except
       coord.request_stop(e)
@@ -114,7 +114,8 @@ def evaluate():
     logits = cifar10.inference(images)
 
     # Calculate predictions.
-    top_k_op = tf.nn.in_top_k(logits, labels, 1)
+    top_1_op = tf.nn.in_top_k(logits, labels, 1)
+    top_5_op = tf.nn.in_top_k(logits, labels, 5)
 
     # Restore the moving average version of the learned variables for eval.
     variable_averages = tf.train.ExponentialMovingAverage(
@@ -128,7 +129,8 @@ def evaluate():
     summary_writer = tf.summary.FileWriter(Arguments.eval_dir, g)
 
     while True:
-      eval_once(saver, summary_writer, top_k_op, summary_op)
+      eval_once(saver, summary_writer, top_1_op, summary_op,'top1')
+      eval_once(saver, summary_writer, top_5_op, summary_op,'top5')
       if Arguments.run_once:
         break
       time.sleep(Arguments.eval_interval_secs)

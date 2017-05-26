@@ -70,6 +70,6 @@ class Arguments(object):
     @staticmethod    
     def set_model_folder(f_str):
         Arguments.train_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/train"
-        eval_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/eval"
-        checkpoint_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/train"
+        Arguments.eval_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/eval"
+        Arguments.checkpoint_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/train"
         
