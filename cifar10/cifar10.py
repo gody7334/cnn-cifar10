@@ -175,10 +175,10 @@ def inputs(eval_data):
     labels = tf.cast(labels, tf.float16)
   return images, labels
 
-def conv_layer(input, size_in, size_out, name="conv"):
+def conv_layer(input, size_in, size_out, name="conv", f_size=3, stride=1, pad="SAME"):
   with tf.variable_scope(name) as scope:
-    W = _variable_with_weight_decay('W', shape=[5, 5, size_in, size_out], stddev=5e-2, wd=0.0)
-    conv = tf.nn.conv2d(input, W, strides=[1, 1, 1, 1], padding="SAME")
+    W = _variable_with_weight_decay('W', shape=[f_size, f_size, size_in, size_out], stddev=5e-2, wd=0.0)
+    conv = tf.nn.conv2d(input, W, strides=[stride, stride, stride, stride], padding=pad)
     b = _variable_on_cpu('b', [size_out], tf.constant_initializer(0.01))
     conv_b = tf.nn.bias_add(conv, b)
     conv_b_relu = tf.nn.relu(conv_b, name=scope.name)
@@ -201,7 +201,14 @@ def bn_layer(input, name='bn'):
     bn = tf.nn.batch_normalization(input, mean, var, beta, gamma, variance_epsilon=1e-10, name=scope.name)
     _activation_summary(bn)
     return bn
-    
+
+def vgg_layer(input, size_out, n_conv, name='vgg'):
+  for i in range(n_conv):
+    input = conv_layer(input,input.get_shape()[3],size_out,name=name+"-conv"+str(i))
+  bn = bn_layer(input, name=name+"norm")
+  pool = tf.nn.max_pool(bn, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],padding='SAME', name=name+'pool')
+  return pool
+
 def inference(images):
   """Build the CIFAR-10 model.
 
@@ -216,6 +223,10 @@ def inference(images):
   # If we only ran this model on a single GPU, we could simplify this function
   # by replacing all instances of tf.get_variable() with tf.Variable().
 
+  #vgg1
+  vgg1 = vgg_layer(images, 64, 2, name='vgg1')
+
+  '''
   # conv1
   conv1 = conv_layer(images, 3, 64, name="conv1")
   # pool1
@@ -230,9 +241,9 @@ def inference(images):
   norm2 = bn_layer(conv2,"norm2")
   # pool2
   pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool2')
-
+  '''
   # local3 (fully connected layer)
-  reshape = tf.reshape(pool2, [Arguments.batch_size, -1])
+  reshape = tf.reshape(vgg1, [Arguments.batch_size, -1])
   dim = reshape.get_shape()[1].value
   local3 = fc_layer(reshape, dim, 384, 'local3')
   
