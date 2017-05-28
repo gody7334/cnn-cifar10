@@ -185,6 +185,27 @@ def conv_layer(input, size_in, size_out, name="conv", f_size=3, stride=1, pad="S
     _activation_summary(conv_b_relu)
     return conv_b_relu
 
+def res_conv_layer(input, res, size_in, size_out, name="res_conv", f_size=3, stride=1, pad="SAME"):
+  with tf.variable_scope(name) as scope:
+    W = _variable_with_weight_decay('W', shape=[f_size, f_size, size_in, size_out], stddev=5e-2, wd=0.0)
+    conv = tf.nn.conv2d(input, W, strides=[stride, stride, stride, stride], padding=pad)
+    b = _variable_on_cpu('b', [size_out], tf.constant_initializer(0.01))
+    conv_b = tf.nn.bias_add(conv, b)
+    
+    diff = conv_b.get_shape().as_list()[3] - res.get_shape().as_list()[3]
+    diff_tensor = tf.cast(tf.convert_to_tensor([[0,0],[0,0],[0,0],[0, diff]]),tf.int32)
+
+    if(diff == 0):
+      res_conv_b = tf.add(conv_b,res)
+    else:
+      #res = tf.pad(res, diff_tensor, "CONSTANT")
+      res = conv_layer(res, res.get_shape().as_list()[3], conv_b.get_shape().as_list()[3],'res_conv_pad',1)
+      res_conv_b = tf.add(conv_b,res)
+
+    res_conv_b_relu = tf.nn.relu(res_conv_b, name=scope.name)
+    _activation_summary(res_conv_b_relu)
+    return res_conv_b_relu
+
 def fc_layer(input, size_in, size_out, name="fc"):
   with tf.variable_scope(name) as scope:
     W = _variable_with_weight_decay('W', shape=[size_in, size_out], stddev=0.04, wd=0.004)
@@ -209,6 +230,13 @@ def vgg_layer(input, size_out, n_conv, name='vgg'):
   pool = tf.nn.max_pool(bn, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],padding='SAME', name=name+'pool')
   return pool
 
+def resnet_layer(input, size_out, name = 'resnet'):
+  conv1 = conv_layer(input,input.get_shape()[3],size_out,name=name+"-conv")
+  conv2 = res_conv_layer(conv1,input,conv1.get_shape()[3],size_out,name=name+"-res_conv")
+  bn = bn_layer(conv2, name=name+"norm")
+  return bn
+  
+
 def inference(images):
   """Build the CIFAR-10 model.
 
@@ -223,23 +251,41 @@ def inference(images):
   # If we only ran this model on a single GPU, we could simplify this function
   # by replacing all instances of tf.get_variable() with tf.Variable().
 
+  #resnet
+  conv1 = conv_layer(images,images.get_shape()[3],32,"conv1",3)
+  bn = bn_layer(conv1, "norm1")
+  pool1 = tf.nn.max_pool(bn, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool1')
+
+  res1 = resnet_layer(pool1, 32, name='res1')
+  res2 = resnet_layer(res1, 32, name='res2') 
+  res3 = resnet_layer(res2, 32, name='res3')
+  res4 = resnet_layer(res3, 64, name='res4')
+  res5 = resnet_layer(res4, 64, name='res5')
+  res6 = resnet_layer(res5, 64, name='res6')
+  res7 = resnet_layer(res6, 128, name='res7')
+  res8 = resnet_layer(res7, 128, name='res8')
+  res9 = resnet_layer(res8, 256, name='res9')
+  res10 = resnet_layer(res9, 256, name='res10')
+  res11 = resnet_layer(res10, 512, name='res11')
+  res12 = resnet_layer(res11, 512, name='res12')
+  pool2 = tf.nn.avg_pool(res12, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool2')
+
   #vgg1
+  '''
   vgg1 = vgg_layer(images, 64, 2, name='vgg1')
-  
   vgg2 = vgg_layer(vgg1, 128, 2, name='vgg2')
-
   vgg3 = vgg_layer(vgg2, 256, 4, name='vgg3')
-    
   vgg4 = vgg_layer(vgg3, 512, 4, name='vgg4')
-
+  '''
   
   # local3 (fully connected layer)
-  reshape = tf.reshape(vgg4, [Arguments.batch_size, -1])
+  reshape = tf.reshape(pool2, [Arguments.batch_size, -1])
   dim = reshape.get_shape()[1].value
-  local3 = fc_layer(reshape, dim, 4096, 'local3')
-  
+  #local3 = fc_layer(reshape, dim, 4096, 'local3')
+    
   # local4
-  local4 = fc_layer(local3, 4096, 1000, 'local4')
+  #local4 = fc_layer(local3, 4096, 1000, 'local4')
+  local4 = fc_layer(reshape, dim, 1000, 'local4')
 
   # linear layer(WX + b),
   # We don't apply softmax here because
