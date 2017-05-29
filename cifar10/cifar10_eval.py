@@ -57,7 +57,6 @@ def eval_once(saver, summary_writer, top_k_op, summary_op,name="top1"):
   #os.environ["CUDA_VISIBLE_DEVICES"]=""
     
   with tf.Session() as sess:
-    print(Arguments.checkpoint_dir)
     ckpt = tf.train.get_checkpoint_state(Arguments.checkpoint_dir)
     if ckpt and ckpt.model_checkpoint_path:
       # Restores from checkpoint

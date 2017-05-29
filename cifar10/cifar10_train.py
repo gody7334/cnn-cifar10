@@ -39,6 +39,7 @@ from __future__ import print_function
 from datetime import datetime
 import time, sys, argparse
 import tensorflow as tf
+import numpy as np
 
 from . import cifar10
 from .cifar10_args import *
@@ -50,19 +51,30 @@ def train():
 
     # Get images and labels for CIFAR-10.
     images, labels = cifar10.distorted_inputs()
-    print(labels.get_shape())
-
+    
     # Build a Graph that computes the logits predictions from the
     # inference model.
+    
     logits = cifar10.inference(images)
-
+    
     # Calculate loss.
     loss = cifar10.loss(logits, labels)
 
     # Build a Graph that trains the model with one batch of examples and
     # updates the model parameters.
     train_op = cifar10.train(loss, global_step)
-
+    
+    #Evaluate Graph
+    train_data = False
+    train_images, train_labels = cifar10.inputs(eval_data=train_data)
+    train_logits = cifar10.inference(train_images)
+    top_1_train_op = tf.nn.in_top_k(train_logits, train_labels, 1)
+    
+    eval_data = Arguments.eval_data == 'test'
+    eval_images, eval_labels = cifar10.inputs(eval_data=eval_data)
+    eval_logits = cifar10.inference(eval_images)
+    top_1_eval_op = tf.nn.in_top_k(eval_logits, eval_labels, 1)
+    
     class _LoggerHook(tf.train.SessionRunHook):
       """Logs loss and runtime."""
 
@@ -88,7 +100,6 @@ def train():
                         'sec/batch)')
           print (format_str % (datetime.now(), self._step, loss_value,
                                examples_per_sec, sec_per_batch))
-    print(Arguments.max_steps)
     
     with tf.train.MonitoredTrainingSession(
         checkpoint_dir=Arguments.train_dir,
@@ -97,8 +108,42 @@ def train():
                _LoggerHook()],
         config=tf.ConfigProto(
             log_device_placement=Arguments.log_device_placement)) as mon_sess:
+      i = 0
       while not mon_sess.should_stop():
         mon_sess.run(train_op)
+        
+        i += 1
+        if i%500 == 0:
+          do_eval(mon_sess, top_1_train_op, global_step, 'train')
+          do_eval(mon_sess, top_1_eval_op, global_step, 'eval')
+          i = 0
+
+def do_eval(sess, eval_op, global_step, name = 'eval'):
+  """Runs one evaluation against the full epoch of data.
+  Args:
+    sess: The session in which the model has been trained.
+    eval_correct: The Tensor that returns the number of correct predictions.
+    images_placeholder: The images placeholder.
+    labels_placeholder: The labels placeholder.
+    data_set: The set of images and labels to evaluate, from
+      input_data.read_data_sets().
+  """
+  # And run one epoch of eval.
+  true_count = 0  # Counts the number of correct predictions.
+  steps_per_epoch = 20
+  num_examples = steps_per_epoch * Arguments.batch_size
+  for step in xrange(steps_per_epoch):
+    predictions = sess.run(eval_op)
+    true_count += np.sum(predictions)
+  precision = float(true_count) / num_examples
+  print('  Num examples: %d  Num correct: %d  Precision @ 1 %s: %0.04f' %
+        (num_examples, true_count, name, precision))
+  summary = tf.Summary()
+  summary_writer = tf.summary.FileWriter(Arguments.eval_dir)
+  summary.ParseFromString(sess.run(eval_op))
+  summary.value.add(tag='Precision @ 1 '+name, simple_value=precision)
+  g_step = global_step.eval(session = sess)
+  summary_writer.add_summary(summary, g_step)
 
 def main(argv=None):  # pylint: disable=unused-argument
   cifar10.maybe_download_and_extract()

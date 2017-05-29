@@ -33,8 +33,9 @@ class Arguments(object):
     eval_data = "test"
     checkpoint_dir = "/home/ipython/cnn-cifar10/tb_log/default/train"
     eval_interval_secs = 60
-    num_examples = 10000
+    num_examples = 256
     run_once = False
+    inference = "default"
 
     '''
     def __init__(self,
@@ -68,7 +69,8 @@ class Arguments(object):
     '''
         
     @staticmethod    
-    def set_model_folder(f_str):
+    def set_inference(f_str):
+        Arguments.inference = "f_str"
         Arguments.train_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/train"
         Arguments.eval_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/eval"
         Arguments.checkpoint_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/train"

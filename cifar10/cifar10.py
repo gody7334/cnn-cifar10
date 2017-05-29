@@ -40,6 +40,7 @@ import re
 import sys
 import tarfile
 from pprint import pprint
+import numpy as np
 
 from six.moves import urllib
 import tensorflow as tf
@@ -99,7 +100,14 @@ def _variable_on_cpu(name, shape, initializer):
   """
   with tf.device('/cpu:0'):
     dtype = tf.float16 if Arguments.use_fp16 else tf.float32
-    var = tf.get_variable(name, shape, initializer=initializer, dtype=dtype)
+    
+    #check if graph varible is exit, reuse it if exit
+    try:
+      var = tf.get_variable(name, shape,initializer=initializer, dtype=dtype)
+    except ValueError:
+      tf.get_variable_scope().reuse_variables()
+      var = tf.get_variable(name)
+
   return var
 
 
@@ -238,65 +246,10 @@ def resnet_layer(input, size_out, name = 'resnet'):
   
 
 def inference(images):
-  """Build the CIFAR-10 model.
+  if Arguments.inference == "resnet3":
+    return resnet3(images)
 
-  Args:
-    images: Images returned from distorted_inputs() or inputs().
 
-  Returns:
-    Logits.
-  """
-  # We instantiate all variables using tf.get_variable() instead of
-  # tf.Variable() in order to share variables across multiple GPU training runs.
-  # If we only ran this model on a single GPU, we could simplify this function
-  # by replacing all instances of tf.get_variable() with tf.Variable().
-
-  #resnet
-  conv1 = conv_layer(images,images.get_shape()[3],32,"conv1",3)
-  bn = bn_layer(conv1, "norm1")
-  pool1 = tf.nn.max_pool(bn, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool1')
-
-  res1 = resnet_layer(pool1, 32, name='res1')
-  res2 = resnet_layer(res1, 32, name='res2') 
-  res3 = resnet_layer(res2, 32, name='res3')
-  res4 = resnet_layer(res3, 64, name='res4')
-  res5 = resnet_layer(res4, 64, name='res5')
-  res6 = resnet_layer(res5, 64, name='res6')
-  res7 = resnet_layer(res6, 128, name='res7')
-  res8 = resnet_layer(res7, 128, name='res8')
-  res9 = resnet_layer(res8, 256, name='res9')
-  res10 = resnet_layer(res9, 256, name='res10')
-  res11 = resnet_layer(res10, 512, name='res11')
-  res12 = resnet_layer(res11, 512, name='res12')
-  pool2 = tf.nn.avg_pool(res12, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool2')
-
-  #vgg1
-  '''
-  vgg1 = vgg_layer(images, 64, 2, name='vgg1')
-  vgg2 = vgg_layer(vgg1, 128, 2, name='vgg2')
-  vgg3 = vgg_layer(vgg2, 256, 4, name='vgg3')
-  vgg4 = vgg_layer(vgg3, 512, 4, name='vgg4')
-  '''
-  
-  # local3 (fully connected layer)
-  reshape = tf.reshape(pool2, [Arguments.batch_size, -1])
-  dim = reshape.get_shape()[1].value
-  #local3 = fc_layer(reshape, dim, 4096, 'local3')
-    
-  # local4
-  #local4 = fc_layer(local3, 4096, 1000, 'local4')
-  local4 = fc_layer(reshape, dim, 1000, 'local4')
-
-  # linear layer(WX + b),
-  # We don't apply softmax here because
-  # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits
-  # and performs the softmax internally for efficiency.
-  softmax_linear = fc_layer(local4, 1000, NUM_CLASSES, 'softmax_linear')
-  
-  softmax = tf.nn.softmax(softmax_linear,name='softmax')
-  _activation_summary(softmax)
- 
-  return softmax_linear
 
 
 def loss(logits, labels):
