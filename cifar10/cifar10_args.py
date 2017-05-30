@@ -36,6 +36,7 @@ class Arguments(object):
     num_examples = 256
     run_once = False
     inference = "default"
+    eval_frequency = 500
 
     '''
     def __init__(self,
@@ -70,7 +71,7 @@ class Arguments(object):
         
     @staticmethod    
     def set_inference(f_str):
-        Arguments.inference = "f_str"
+        Arguments.inference = f_str
         Arguments.train_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/train"
         Arguments.eval_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/eval"
         Arguments.checkpoint_dir = "/home/ipython/cnn-cifar10/tb_log/"+f_str+"/train"

@@ -47,6 +47,7 @@ import tensorflow as tf
 
 from . import cifar10_input
 from .cifar10_args import * 
+from .cifar10_inference import *
 
 # Global constants describing the CIFAR-10 data set.
 IMAGE_SIZE = cifar10_input.IMAGE_SIZE
@@ -186,7 +187,7 @@ def inputs(eval_data):
 def conv_layer(input, size_in, size_out, name="conv", f_size=3, stride=1, pad="SAME"):
   with tf.variable_scope(name) as scope:
     W = _variable_with_weight_decay('W', shape=[f_size, f_size, size_in, size_out], stddev=5e-2, wd=0.0)
-    conv = tf.nn.conv2d(input, W, strides=[stride, stride, stride, stride], padding=pad)
+    conv = tf.nn.conv2d(input, W, strides=[1, stride, stride, 1], padding=pad)
     b = _variable_on_cpu('b', [size_out], tf.constant_initializer(0.01))
     conv_b = tf.nn.bias_add(conv, b)
     conv_b_relu = tf.nn.relu(conv_b, name=scope.name)
@@ -243,14 +244,19 @@ def resnet_layer(input, size_out, name = 'resnet'):
   conv2 = res_conv_layer(conv1,input,conv1.get_shape()[3],size_out,name=name+"-res_conv")
   bn = bn_layer(conv2, name=name+"norm")
   return bn
-  
 
 def inference(images):
   if Arguments.inference == "resnet3":
     return resnet3(images)
-
-
-
+  elif Arguments.inference == "vggA":
+    return vggA(images)
+  elif Arguments.inference == "vggB":
+    return vggB(images)
+  elif Arguments.inference == "vggD":
+    return vggD(images)
+  elif Arguments.inference == "vggE":
+    return vggE(images)
+  
 
 def loss(logits, labels):
   """Add L2Loss to all the trainable variables.
@@ -379,3 +385,154 @@ def maybe_download_and_extract():
   extracted_dir_path = os.path.join(dest_directory, 'cifar-10-batches-bin')
   if not os.path.exists(extracted_dir_path):
     tarfile.open(filepath, 'r:gz').extractall(dest_directory)
+    
+
+def resnet3(images):
+  
+  #resnet
+  conv1 = conv_layer(images,images.get_shape()[3],32,"conv1",3)
+  bn = bn_layer(conv1, "norm1")
+  pool1 = tf.nn.max_pool(bn, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool1')
+
+  res1 = resnet_layer(pool1, 32, name='res1')
+  res2 = resnet_layer(res1, 32, name='res2') 
+  res3 = resnet_layer(res2, 32, name='res3')
+  res4 = resnet_layer(res3, 64, name='res4')
+  res5 = resnet_layer(res4, 64, name='res5')
+  res6 = resnet_layer(res5, 64, name='res6')
+  res7 = resnet_layer(res6, 128, name='res7')
+  res8 = resnet_layer(res7, 128, name='res8')
+  res9 = resnet_layer(res8, 256, name='res9')
+  res10 = resnet_layer(res9, 256, name='res10')
+  res11 = resnet_layer(res10, 512, name='res11')
+  res12 = resnet_layer(res11, 512, name='res12')
+  res13 = resnet_layer(res12, 512, name='res13')
+  pool2 = tf.nn.avg_pool(res13, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool2')
+  
+  # local3 (fully connected layer)
+  reshape = tf.reshape(pool2, [Arguments.batch_size, -1])
+  dim = reshape.get_shape()[1].value
+  #local3 = fc_layer(reshape, dim, 4096, 'local3')
+    
+  # local4
+  #local4 = fc_layer(local3, 4096, 1000, 'local4')
+  local4 = fc_layer(reshape, dim, 1000, 'local4')
+
+  # linear layer(WX + b),
+  # We don't apply softmax here because
+  # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits
+  # and performs the softmax internally for efficiency.
+  softmax_linear = fc_layer(local4, 1000, NUM_CLASSES, 'softmax_linear')
+  
+  softmax = tf.nn.softmax(softmax_linear,name='softmax')
+  _activation_summary(softmax)
+ 
+  return softmax_linear
+
+def vggA(images):
+
+  vgg1 = vgg_layer(images, 64, 1, name='vgg1')
+  vgg2 = vgg_layer(vgg1, 128, 1, name='vgg2')
+  vgg3 = vgg_layer(vgg2, 256, 2, name='vgg3')
+  vgg4 = vgg_layer(vgg3, 512, 2, name='vgg4')
+  vgg5 = vgg_layer(vgg4, 512, 2, name='vgg5')
+
+  
+  # local3 (fully connected layer)
+  reshape = tf.reshape(vgg5, [Arguments.batch_size, -1])
+  dim = reshape.get_shape()[1].value
+  local3 = fc_layer(reshape, dim, 4096, 'local3')
+    
+  # local4
+  local4 = fc_layer(local3, 4096, 1000, 'local4')
+
+  # linear layer(WX + b),
+  softmax_linear = fc_layer(local4, 1000, NUM_CLASSES, 'softmax_linear')
+  
+  # softmax,
+  softmax = tf.nn.softmax(softmax_linear,name='softmax')
+  _activation_summary(softmax)
+ 
+  #however, tf do softmax when it compute softmax loss, therefore return linear layer
+  return softmax_linear
+
+def vggB(images):
+
+  vgg1 = vgg_layer(images, 64, 2, name='vgg1')
+  vgg2 = vgg_layer(vgg1, 128, 2, name='vgg2')
+  vgg3 = vgg_layer(vgg2, 256, 2, name='vgg3')
+  vgg4 = vgg_layer(vgg3, 512, 2, name='vgg4')
+  vgg5 = vgg_layer(vgg4, 512, 2, name='vgg5')
+
+  
+  # local3 (fully connected layer)
+  reshape = tf.reshape(vgg5, [Arguments.batch_size, -1])
+  dim = reshape.get_shape()[1].value
+  local3 = fc_layer(reshape, dim, 4096, 'local3')
+    
+  # local4
+  local4 = fc_layer(local3, 4096, 1000, 'local4')
+
+  # linear layer(WX + b),
+  softmax_linear = fc_layer(local4, 1000, NUM_CLASSES, 'softmax_linear')
+  
+  # softmax,
+  softmax = tf.nn.softmax(softmax_linear,name='softmax')
+  _activation_summary(softmax)
+ 
+  #however, tf do softmax when it compute softmax loss, therefore return linear layer
+  return softmax_linear
+
+def vggD(images):
+
+  vgg1 = vgg_layer(images, 64, 2, name='vgg1')
+  vgg2 = vgg_layer(vgg1, 128, 2, name='vgg2')
+  vgg3 = vgg_layer(vgg2, 256, 3, name='vgg3')
+  vgg4 = vgg_layer(vgg3, 512, 3, name='vgg4')
+  vgg5 = vgg_layer(vgg4, 512, 3, name='vgg5')
+
+  
+  # local3 (fully connected layer)
+  reshape = tf.reshape(vgg5, [Arguments.batch_size, -1])
+  dim = reshape.get_shape()[1].value
+  local3 = fc_layer(reshape, dim, 4096, 'local3')
+    
+  # local4
+  local4 = fc_layer(local3, 4096, 1000, 'local4')
+
+  # linear layer(WX + b),
+  softmax_linear = fc_layer(local4, 1000, NUM_CLASSES, 'softmax_linear')
+  
+  # softmax,
+  softmax = tf.nn.softmax(softmax_linear,name='softmax')
+  _activation_summary(softmax)
+ 
+  #however, tf do softmax when it compute softmax loss, therefore return linear layer
+  return softmax_linear
+
+def vggE(images):
+
+  vgg1 = vgg_layer(images, 64, 2, name='vgg1')
+  vgg2 = vgg_layer(vgg1, 128, 2, name='vgg2')
+  vgg3 = vgg_layer(vgg2, 256, 4, name='vgg3')
+  vgg4 = vgg_layer(vgg3, 512, 4, name='vgg4')
+  vgg5 = vgg_layer(vgg4, 512, 4, name='vgg5')
+
+  
+  # local3 (fully connected layer)
+  reshape = tf.reshape(vgg5, [Arguments.batch_size, -1])
+  dim = reshape.get_shape()[1].value
+  local3 = fc_layer(reshape, dim, 4096, 'local3')
+    
+  # local4
+  local4 = fc_layer(local3, 4096, 1000, 'local4')
+
+  # linear layer(WX + b),
+  softmax_linear = fc_layer(local4, 1000, NUM_CLASSES, 'softmax_linear')
+  
+  # softmax,
+  softmax = tf.nn.softmax(softmax_linear,name='softmax')
+  _activation_summary(softmax)
+ 
+  #however, tf do softmax when it compute softmax loss, therefore return linear layer
+  return softmax_linear

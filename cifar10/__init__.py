@@ -14,10 +14,11 @@
 # ==============================================================================
 
 """Makes helper libraries available in the cifar10 package."""
-'''from __future__ import absolute_import
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
+'''
 from . import cifar10
 from . import cifar10_input
+from . import cifar10_args
 '''

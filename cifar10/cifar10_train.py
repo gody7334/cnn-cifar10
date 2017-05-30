@@ -41,7 +41,8 @@ import time, sys, argparse
 import tensorflow as tf
 import numpy as np
 
-from . import cifar10
+from . import cifar10_layer
+from . import cifar10_inference
 from .cifar10_args import *
 
 def train():
@@ -50,29 +51,29 @@ def train():
     global_step = tf.contrib.framework.get_or_create_global_step()
 
     # Get images and labels for CIFAR-10.
-    images, labels = cifar10.distorted_inputs()
+    images, labels = cifar10_layer.distorted_inputs()
     
     # Build a Graph that computes the logits predictions from the
     # inference model.
     
-    logits = cifar10.inference(images)
+    logits = cifar10_layer.inference(images)
     
     # Calculate loss.
-    loss = cifar10.loss(logits, labels)
+    loss = cifar10_layer.loss(logits, labels)
 
     # Build a Graph that trains the model with one batch of examples and
     # updates the model parameters.
-    train_op = cifar10.train(loss, global_step)
+    train_op = cifar10_layer.train(loss, global_step)
     
     #Evaluate Graph
     train_data = False
-    train_images, train_labels = cifar10.inputs(eval_data=train_data)
-    train_logits = cifar10.inference(train_images)
+    train_images, train_labels = cifar10_layer.inputs(eval_data=train_data)
+    train_logits = cifar10_layer.inference(train_images)
     top_1_train_op = tf.nn.in_top_k(train_logits, train_labels, 1)
     
     eval_data = Arguments.eval_data == 'test'
-    eval_images, eval_labels = cifar10.inputs(eval_data=eval_data)
-    eval_logits = cifar10.inference(eval_images)
+    eval_images, eval_labels = cifar10_layer.inputs(eval_data=eval_data)
+    eval_logits = cifar10_layer.inference(eval_images)
     top_1_eval_op = tf.nn.in_top_k(eval_logits, eval_labels, 1)
     
     class _LoggerHook(tf.train.SessionRunHook):
@@ -113,7 +114,7 @@ def train():
         mon_sess.run(train_op)
         
         i += 1
-        if i%500 == 0:
+        if i%Arguments.eval_frequency == 0:
           do_eval(mon_sess, top_1_train_op, global_step, 'train')
           do_eval(mon_sess, top_1_eval_op, global_step, 'eval')
           i = 0
@@ -140,13 +141,13 @@ def do_eval(sess, eval_op, global_step, name = 'eval'):
         (num_examples, true_count, name, precision))
   summary = tf.Summary()
   summary_writer = tf.summary.FileWriter(Arguments.eval_dir)
-  summary.ParseFromString(sess.run(eval_op))
+  #summary.ParseFromString(sess.run(eval_op))
   summary.value.add(tag='Precision @ 1 '+name, simple_value=precision)
   g_step = global_step.eval(session = sess)
   summary_writer.add_summary(summary, g_step)
 
 def main(argv=None):  # pylint: disable=unused-argument
-  cifar10.maybe_download_and_extract()
+  cifar10_layer.maybe_download_and_extract()
   if tf.gfile.Exists(Arguments.train_dir):
     tf.gfile.DeleteRecursively(Arguments.train_dir)
   tf.gfile.MakeDirs(Arguments.train_dir)
