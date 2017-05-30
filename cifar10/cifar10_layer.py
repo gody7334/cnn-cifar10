@@ -239,6 +239,33 @@ def vgg_layer(input, size_out, n_conv, name='vgg'):
   pool = tf.nn.max_pool(bn, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],padding='SAME', name=name+'pool')
   return pool
 
+def res_layer(input, size_out, name="res"):
+  with tf.variable_scope(name) as scope:
+    # compute dim different
+    diff = input.get_shape().as_list()[3] - size_out
+    # conv1
+    if(diff == 0):
+      conv1 = conv_layer(input,input.get_shape()[3],size_out,name=name+"-conv1")
+    else:
+      conv1 = conv_layer(input,input.get_shape()[3],size_out,name=name+"-conv1_dim_down",stride=2)
+    
+    # conv2
+    W = _variable_with_weight_decay('W', shape=[3, 3, size_out, size_out], stddev=5e-2, wd=0.0)
+    conv2 = tf.nn.conv2d(conv1, W, strides=[1, 1, 1, 1], padding='SAME')
+    b = _variable_on_cpu('b', [size_out], tf.constant_initializer(0.01))
+    conv_b = tf.nn.bias_add(conv2, b)
+
+    if(diff == 0):
+      res_conv_b = tf.add(conv_b,input)
+    else:
+      res = conv_layer(input, input.get_shape().as_list()[3], size_out,'res_dim_up',f_size=1,stride=2)
+      res_conv_b = tf.add(conv_b,res)
+
+    res_conv_b_relu = tf.nn.relu(res_conv_b, name=scope.name)
+    _activation_summary(res_conv_b_relu)
+    bn = bn_layer(res_conv_b_relu, name=name+"norm")
+    return bn
+
 def resnet_layer(input, size_out, name = 'resnet'):
   conv1 = conv_layer(input,input.get_shape()[3],size_out,name=name+"-conv")
   conv2 = res_conv_layer(conv1,input,conv1.get_shape()[3],size_out,name=name+"-res_conv")
@@ -248,6 +275,8 @@ def resnet_layer(input, size_out, name = 'resnet'):
 def inference(images):
   if Arguments.inference == "resnet3":
     return resnet3(images)
+  elif Arguments.inference == "resnet1":
+    return resnet1(images)
   elif Arguments.inference == "vggA":
     return vggA(images)
   elif Arguments.inference == "vggB":
@@ -385,16 +414,53 @@ def maybe_download_and_extract():
   extracted_dir_path = os.path.join(dest_directory, 'cifar-10-batches-bin')
   if not os.path.exists(extracted_dir_path):
     tarfile.open(filepath, 'r:gz').extractall(dest_directory)
-    
+
+def resnet1(images):
+  
+  #resnet
+  conv1 = conv_layer(images,images.get_shape()[3],64,"conv1",7)
+  bn = bn_layer(conv1, "norm1")
+  pool1 = tf.nn.max_pool(bn, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool1')
+
+  res1 = res_layer(pool1, 64, name='res1')
+  res2 = res_layer(res1, 64, name='res2') 
+  res3 = res_layer(res2, 64, name='res3')
+  res4 = res_layer(res3, 128, name='res4')
+  res5 = res_layer(res4, 128, name='res5')
+  res6 = res_layer(res5, 128, name='res6')
+  res7 = res_layer(res6, 128, name='res7')
+  res8 = res_layer(res7, 128, name='res8')
+  res9 = res_layer(res8, 256, name='res9')
+  res10 = res_layer(res9, 256, name='res10')
+  res11 = res_layer(res10, 256, name='res11')
+  res12 = res_layer(res11, 256, name='res12')
+  res13 = res_layer(res12, 256, name='res13')
+  
+  pool2 = tf.nn.avg_pool(res13, ksize=[1, 2, 2, 1], strides=[1, 1, 1, 1],padding='SAME', name='pool2')
+  
+  # local3 (fully connected layer)
+  reshape = tf.reshape(pool2, [Arguments.batch_size, -1])
+  local4 = fc_layer(reshape, reshape.get_shape()[1].value, 1000, 'local4')
+
+  # linear layer(WX + b),
+  # We don't apply softmax here because
+  # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits
+  # and performs the softmax internally for efficiency.
+  softmax_linear = fc_layer(local4, 1000, NUM_CLASSES, 'softmax_linear')
+  
+  softmax = tf.nn.softmax(softmax_linear,name='softmax')
+  _activation_summary(softmax)
+ 
+  return softmax_linear
 
 def resnet3(images):
   
   #resnet
   conv1 = conv_layer(images,images.get_shape()[3],32,"conv1",3)
   bn = bn_layer(conv1, "norm1")
-  pool1 = tf.nn.max_pool(bn, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool1')
+  #pool1 = tf.nn.max_pool(bn, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool1')
 
-  res1 = resnet_layer(pool1, 32, name='res1')
+  res1 = resnet_layer(bn, 32, name='res1')
   res2 = resnet_layer(res1, 32, name='res2') 
   res3 = resnet_layer(res2, 32, name='res3')
   res4 = resnet_layer(res3, 64, name='res4')

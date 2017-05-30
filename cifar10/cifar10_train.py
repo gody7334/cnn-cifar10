@@ -66,6 +66,7 @@ def train():
     train_op = cifar10_layer.train(loss, global_step)
     
     #Evaluate Graph
+    '''
     train_data = False
     train_images, train_labels = cifar10_layer.inputs(eval_data=train_data)
     train_logits = cifar10_layer.inference(train_images)
@@ -75,6 +76,7 @@ def train():
     eval_images, eval_labels = cifar10_layer.inputs(eval_data=eval_data)
     eval_logits = cifar10_layer.inference(eval_images)
     top_1_eval_op = tf.nn.in_top_k(eval_logits, eval_labels, 1)
+    '''
     
     class _LoggerHook(tf.train.SessionRunHook):
       """Logs loss and runtime."""
@@ -113,11 +115,13 @@ def train():
       while not mon_sess.should_stop():
         mon_sess.run(train_op)
         
+        '''
         i += 1
         if i%Arguments.eval_frequency == 0:
           do_eval(mon_sess, top_1_train_op, global_step, 'train')
           do_eval(mon_sess, top_1_eval_op, global_step, 'eval')
           i = 0
+        '''
 
 def do_eval(sess, eval_op, global_step, name = 'eval'):
   """Runs one evaluation against the full epoch of data.

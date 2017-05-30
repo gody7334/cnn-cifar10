@@ -32,8 +32,8 @@ class Arguments(object):
     eval_dir = "/home/ipython/cnn-cifar10/tb_log/default/eval"
     eval_data = "test"
     checkpoint_dir = "/home/ipython/cnn-cifar10/tb_log/default/train"
-    eval_interval_secs = 60
-    num_examples = 256
+    eval_interval_secs = 600
+    num_examples = 2560
     run_once = False
     inference = "default"
     eval_frequency = 500
