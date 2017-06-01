@@ -104,13 +104,13 @@ def train():
           print (format_str % (datetime.now(), self._step, loss_value,
                                examples_per_sec, sec_per_batch))
     
+    config = tf.ConfigProto(log_device_placement=Arguments.log_device_placement)
+    config.gpu_options.allow_growth=True
     with tf.train.MonitoredTrainingSession(
         checkpoint_dir=Arguments.train_dir,
         hooks=[tf.train.StopAtStepHook(last_step=Arguments.max_steps),
                tf.train.NanTensorHook(loss),
-               _LoggerHook()],
-        config=tf.ConfigProto(
-            log_device_placement=Arguments.log_device_placement)) as mon_sess:
+               _LoggerHook()],config=config) as mon_sess:
       i = 0
       while not mon_sess.should_stop():
         mon_sess.run(train_op)
