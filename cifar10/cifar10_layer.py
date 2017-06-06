@@ -277,6 +277,8 @@ def inference(images):
     return resnet3(images)
   elif Arguments.inference == "resnet1":
     return resnet1(images)
+  elif Arguments.inference == "resnet5":
+    return resnet5(images)
   elif Arguments.inference == "vggA":
     return vggA(images)
   elif Arguments.inference == "vggB":
@@ -368,8 +370,9 @@ def train(total_loss, global_step):
 
   # Compute gradients.
   with tf.control_dependencies([loss_averages_op]):
-    opt = tf.train.GradientDescentOptimizer(lr)
+    #opt = tf.train.GradientDescentOptimizer(lr)
     #opt = tf.train.AdamOptimizer(lr)
+    opt = tf.train.MomentumOptimizer(lr,0.9)
     grads = opt.compute_gradients(total_loss)
 
   # Apply gradients.
@@ -483,6 +486,46 @@ def resnet3(images):
   # local4
   #local4 = fc_layer(local3, 4096, 1000, 'local4')
   local4 = fc_layer(reshape, dim, 1000, 'local4')
+
+  # linear layer(WX + b),
+  # We don't apply softmax here because
+  # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits
+  # and performs the softmax internally for efficiency.
+  softmax_linear = fc_layer(local4, 1000, NUM_CLASSES, 'softmax_linear')
+  
+  softmax = tf.nn.softmax(softmax_linear,name='softmax')
+  _activation_summary(softmax)
+ 
+  return softmax_linear
+
+def resnet5(images):
+  
+  #resnet
+  conv1 = conv_layer(images,images.get_shape()[3],64,"conv1",7)
+  bn = bn_layer(conv1, "norm1")
+  pool1 = tf.nn.max_pool(bn, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool1')
+
+  res1 = res_layer(pool1, 64, name='res1')
+  res2 = res_layer(res1, 64, name='res2') 
+  res3 = res_layer(res2, 64, name='res3')
+  res4 = res_layer(res3, 64, name='res4') 
+  res5 = res_layer(res4, 64, name='res5')
+  res6 = res_layer(res5, 128, name='res6')
+  res7 = res_layer(res6, 128, name='res7')
+  res8 = res_layer(res7, 128, name='res8')
+  res9 = res_layer(res8, 128, name='res9')
+  res10 = res_layer(res9, 128, name='res10')
+  res11 = res_layer(res10, 256, name='res11')
+  res12 = res_layer(res11, 256, name='res12')
+  res13 = res_layer(res12, 256, name='res13')
+  res14 = res_layer(res13, 256, name='res14')
+  res15 = res_layer(res14, 256, name='res15')
+  
+  pool2 = tf.nn.avg_pool(res15, ksize=[1, 2, 2, 1], strides=[1, 1, 1, 1],padding='SAME', name='pool2')
+  
+  # local3 (fully connected layer)
+  reshape = tf.reshape(pool2, [Arguments.batch_size, -1])
+  local4 = fc_layer(reshape, reshape.get_shape()[1].value, 1000, 'local4')
 
   # linear layer(WX + b),
   # We don't apply softmax here because
